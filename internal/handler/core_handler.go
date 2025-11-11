@@ -12,17 +12,10 @@ import (
 	"github.com/mesamhaider/edge-device-sample/internal/services"
 )
 
-// CoreHandler coordinates HTTP handlers for device metrics.
-type CoreHandler struct {
-	storage *data.InMemoryStorage
-}
-
-// NewCoreHandler constructs a CoreHandler with the provided storage.
 func NewCoreHandler(storage *data.InMemoryStorage) *CoreHandler {
 	return &CoreHandler{storage: storage}
 }
 
-// AddBeat handles POST /devices/{device_id}/heartbeat.
 func (h *CoreHandler) AddBeat(w http.ResponseWriter, r *http.Request) {
 	device, err := h.getDeviceFromRequest(r)
 	if err != nil {
