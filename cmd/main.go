@@ -16,6 +16,7 @@ func main() {
 	}
 
 	coreHandler := handler.NewCoreHandler(storage)
+
 	router := coreHttp.NewRouter(coreHandler)
 
 	const addr = ":8080"
