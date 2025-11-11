@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/zap"
 
-	"github.com/mesamhaider/edge-device-sample/internal/logging"
+	"github.com/mesamhaider/edge-device-sample/internal/pkg/logging"
 )
 
 func RequestContextMiddleware(baseLogger *zap.Logger) func(http.Handler) http.Handler {

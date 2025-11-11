@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/mesamhaider/edge-device-sample/internal/data"
-	"github.com/mesamhaider/edge-device-sample/internal/logging"
+	"github.com/mesamhaider/edge-device-sample/internal/pkg/logging"
 	"github.com/mesamhaider/edge-device-sample/internal/services"
 )
 
@@ -79,7 +79,7 @@ func (h *CoreHandler) AddBeat(w http.ResponseWriter, r *http.Request) {
 		zap.Bool("new_minute", created),
 	)
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // NewDeviceStats handles POST /devices/{device_id}/stats.
@@ -127,7 +127,7 @@ func (h *CoreHandler) NewDeviceStats(w http.ResponseWriter, r *http.Request) {
 		zap.Int64("upload_sum_ns", device.UploadSumNs),
 	)
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GetDeviceStats handles GET /devices/{device_id}/stats.
@@ -208,25 +208,4 @@ func (h *CoreHandler) writeError(w http.ResponseWriter, r *http.Request, err err
 	logger := logging.LoggerFromContext(r.Context(), h.logger)
 	logger.Error("unexpected error handling request", zap.Error(err))
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-}
-
-type apiError struct {
-	Status  int
-	Message string
-}
-
-func (e *apiError) Error() string {
-	return e.Message
-}
-
-func newBadRequestError(message string) *apiError {
-	return &apiError{Status: http.StatusBadRequest, Message: message}
-}
-
-func newNotFoundError(message string) *apiError {
-	return &apiError{Status: http.StatusNotFound, Message: message}
-}
-
-func formatUploadTime(d time.Duration) string {
-	return d.String()
 }
