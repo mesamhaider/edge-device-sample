@@ -17,12 +17,13 @@ func CalculateUptime(sumHeartbeat int, firstHB, lastHB time.Time) float64 {
 	return (float64(sumHeartbeat) / float64(denominator)) * 100.0
 }
 
-func CalculateAverageUploadTime(uploadSumMs int64, uploadCount int) int64 {
-	if uploadCount <= 0 {
+func CalculateAverageUploadTime(uploadSumNs int64, uploadCount int) time.Duration {
+	if uploadCount <= 0 || uploadSumNs <= 0 {
 		return 0
 	}
 
-	return uploadSumMs / int64(uploadCount)
+	avg := uploadSumNs / int64(uploadCount)
+	return time.Duration(avg)
 }
 
 func diffMinutesInclusive(start, end time.Time) int {

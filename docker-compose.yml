@@ -1,6 +1,6 @@
 services:
   server:
-    image: golang:1.25.1
+    image: golang:1.22-bookworm
     working_dir: /app
     command: go run ./cmd
     volumes:

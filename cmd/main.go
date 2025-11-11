@@ -4,25 +4,39 @@ import (
 	"log"
 	"net/http"
 
+	"go.uber.org/zap"
+
 	"github.com/mesamhaider/edge-device-sample/internal/data"
 	"github.com/mesamhaider/edge-device-sample/internal/handler"
 	coreHttp "github.com/mesamhaider/edge-device-sample/internal/http"
 )
 
 func main() {
-	storage, err := data.NewInMemoryStorageFromCSV("etc/devices.csv")
+	logger, err := zap.NewProduction()
 	if err != nil {
-		log.Fatalf("failed to load devices: %v", err)
+		log.Fatalf("failed to create logger: %v", err)
 	}
 
-	coreHandler := handler.NewCoreHandler(storage)
+	defer func() {
+		_ = logger.Sync()
+	}()
 
-	router := coreHttp.NewRouter(coreHandler)
+	storage, err := data.NewInMemoryStorageFromCSV("etc/devices.csv")
+	if err != nil {
+		logger.Fatal("failed to load devices", zap.Error(err))
+	}
+
+	coreHandler := handler.NewCoreHandler(storage, logger)
+
+	router := coreHttp.NewRouter(logger, coreHandler)
 
 	const addr = ":8080"
-	log.Printf("Starting HTTP server on %s with %d devices", addr, storage.DevicesCount())
+	logger.Info("starting HTTP server",
+		zap.String("addr", addr),
+		zap.Int("device_count", storage.DevicesCount()),
+	)
 
 	if err := http.ListenAndServe(addr, router); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("HTTP server failed: %v", err)
+		logger.Fatal("HTTP server failed", zap.Error(err))
 	}
 }

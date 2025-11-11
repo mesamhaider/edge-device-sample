@@ -13,7 +13,7 @@ type Device struct {
 	FirstHB      time.Time
 	LastHB       time.Time
 	UploadCount  int
-	UploadSumMs  int64
+	UploadSumNs  int64
 }
 
 type InMemoryStorage struct {

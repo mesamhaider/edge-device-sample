@@ -1,25 +1,31 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
 	"github.com/mesamhaider/edge-device-sample/internal/data"
+	"github.com/mesamhaider/edge-device-sample/internal/logging"
 	"github.com/mesamhaider/edge-device-sample/internal/services"
 )
 
-func NewCoreHandler(storage *data.InMemoryStorage) *CoreHandler {
-	return &CoreHandler{storage: storage}
+func NewCoreHandler(storage *data.InMemoryStorage, logger *zap.Logger) *CoreHandler {
+	return &CoreHandler{
+		storage: storage,
+		logger:  logger,
+	}
 }
 
 func (h *CoreHandler) AddBeat(w http.ResponseWriter, r *http.Request) {
 	device, err := h.getDeviceFromRequest(r)
 	if err != nil {
-		h.writeError(w, err)
+		h.writeError(w, r, err)
 		return
 	}
 
@@ -28,19 +34,19 @@ func (h *CoreHandler) AddBeat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		h.writeError(w, newBadRequestError("invalid JSON body"))
+		h.writeError(w, r, newBadRequestError("invalid JSON body"))
 		return
 	}
 	defer r.Body.Close()
 
 	if payload.SentAt == "" {
-		h.writeError(w, newBadRequestError("sent_at is required"))
+		h.writeError(w, r, newBadRequestError("sent_at is required"))
 		return
 	}
 
 	sentAt, err := time.Parse(time.RFC3339, payload.SentAt)
 	if err != nil {
-		h.writeError(w, newBadRequestError("sent_at must be RFC3339 formatted"))
+		h.writeError(w, r, newBadRequestError("sent_at must be RFC3339 formatted"))
 		return
 	}
 
@@ -53,8 +59,10 @@ func (h *CoreHandler) AddBeat(w http.ResponseWriter, r *http.Request) {
 		device.HeartbeatMin = make(map[time.Time]struct{})
 	}
 
+	created := false
 	if _, exists := device.HeartbeatMin[sentAt]; !exists {
 		device.HeartbeatMin[sentAt] = struct{}{}
+		created = true
 	}
 
 	if device.FirstHB.IsZero() || sentAt.Before(device.FirstHB) {
@@ -64,6 +72,13 @@ func (h *CoreHandler) AddBeat(w http.ResponseWriter, r *http.Request) {
 		device.LastHB = sentAt
 	}
 
+	logger := logging.LoggerFromContext(r.Context(), h.logger)
+	logger.Info("heartbeat recorded",
+		zap.String("device_id", device.ID),
+		zap.Time("sent_at", sentAt),
+		zap.Bool("new_minute", created),
+	)
+
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -71,7 +86,7 @@ func (h *CoreHandler) AddBeat(w http.ResponseWriter, r *http.Request) {
 func (h *CoreHandler) NewDeviceStats(w http.ResponseWriter, r *http.Request) {
 	device, err := h.getDeviceFromRequest(r)
 	if err != nil {
-		h.writeError(w, err)
+		h.writeError(w, r, err)
 		return
 	}
 
@@ -81,20 +96,20 @@ func (h *CoreHandler) NewDeviceStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		h.writeError(w, newBadRequestError("invalid JSON body"))
+		h.writeError(w, r, newBadRequestError("invalid JSON body"))
 		return
 	}
 	defer r.Body.Close()
 
 	if payload.SentAt != "" {
 		if _, err := time.Parse(time.RFC3339, payload.SentAt); err != nil {
-			h.writeError(w, newBadRequestError("sent_at must be RFC3339 formatted"))
+			h.writeError(w, r, newBadRequestError("sent_at must be RFC3339 formatted"))
 			return
 		}
 	}
 
 	if payload.UploadTime < 0 {
-		h.writeError(w, newBadRequestError("upload_time must be >= 0"))
+		h.writeError(w, r, newBadRequestError("upload_time must be >= 0"))
 		return
 	}
 
@@ -102,7 +117,15 @@ func (h *CoreHandler) NewDeviceStats(w http.ResponseWriter, r *http.Request) {
 	defer device.Unlock()
 
 	device.UploadCount++
-	device.UploadSumMs += payload.UploadTime
+	device.UploadSumNs += payload.UploadTime
+
+	logger := logging.LoggerFromContext(r.Context(), h.logger)
+	logger.Info("stats recorded",
+		zap.String("device_id", device.ID),
+		zap.Int64("upload_time_ns", payload.UploadTime),
+		zap.Int("upload_count", device.UploadCount),
+		zap.Int64("upload_sum_ns", device.UploadSumNs),
+	)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -111,7 +134,7 @@ func (h *CoreHandler) NewDeviceStats(w http.ResponseWriter, r *http.Request) {
 func (h *CoreHandler) GetDeviceStats(w http.ResponseWriter, r *http.Request) {
 	device, err := h.getDeviceFromRequest(r)
 	if err != nil {
-		h.writeError(w, err)
+		h.writeError(w, r, err)
 		return
 	}
 
@@ -119,7 +142,7 @@ func (h *CoreHandler) GetDeviceStats(w http.ResponseWriter, r *http.Request) {
 
 	sumHeartbeat := len(device.HeartbeatMin)
 	uptime := services.CalculateUptime(sumHeartbeat, device.FirstHB, device.LastHB)
-	avgUploadMs := services.CalculateAverageUploadTime(device.UploadSumMs, device.UploadCount)
+	avgUploadDur := services.CalculateAverageUploadTime(device.UploadSumNs, device.UploadCount)
 
 	device.RUnlock()
 
@@ -128,10 +151,17 @@ func (h *CoreHandler) GetDeviceStats(w http.ResponseWriter, r *http.Request) {
 		AvgUploadTime string  `json:"avg_upload_time"`
 	}{
 		Uptime:        uptime,
-		AvgUploadTime: formatUploadTime(avgUploadMs),
+		AvgUploadTime: formatUploadTime(avgUploadDur),
 	}
 
-	h.writeJSON(w, http.StatusOK, resp)
+	logger := logging.LoggerFromContext(r.Context(), h.logger)
+	logger.Info("stats retrieved",
+		zap.String("device_id", device.ID),
+		zap.Float64("uptime", uptime),
+		zap.Duration("avg_upload_time", avgUploadDur),
+	)
+
+	h.writeJSON(r.Context(), w, http.StatusOK, resp)
 }
 
 func (h *CoreHandler) getDeviceFromRequest(r *http.Request) (*data.Device, error) {
@@ -148,24 +178,35 @@ func (h *CoreHandler) getDeviceFromRequest(r *http.Request) (*data.Device, error
 	return device, nil
 }
 
-func (h *CoreHandler) writeJSON(w http.ResponseWriter, status int, payload any) {
+func (h *CoreHandler) writeJSON(ctx context.Context, w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		logger := logging.LoggerFromContext(ctx, h.logger)
+		logger.Error("failed to encode response payload",
+			zap.Error(err),
+		)
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
 
-func (h *CoreHandler) writeError(w http.ResponseWriter, err error) {
+func (h *CoreHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	var apiErr *apiError
 	if errors.As(err, &apiErr) {
-		h.writeJSON(w, apiErr.Status, map[string]string{
+		h.writeJSON(r.Context(), w, apiErr.Status, map[string]string{
 			"error": apiErr.Message,
 		})
+		logger := logging.LoggerFromContext(r.Context(), h.logger)
+		logger.Warn("request error",
+			zap.String("error", apiErr.Message),
+			zap.Int("status", apiErr.Status),
+		)
 		return
 	}
 
+	logger := logging.LoggerFromContext(r.Context(), h.logger)
+	logger.Error("unexpected error handling request", zap.Error(err))
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
@@ -186,6 +227,6 @@ func newNotFoundError(message string) *apiError {
 	return &apiError{Status: http.StatusNotFound, Message: message}
 }
 
-func formatUploadTime(ms int64) string {
-	return time.Duration(ms * int64(time.Millisecond)).String()
+func formatUploadTime(d time.Duration) string {
+	return d.String()
 }
