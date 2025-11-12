@@ -11,8 +11,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/mesamhaider/edge-device-sample/internal/data"
+	services "github.com/mesamhaider/edge-device-sample/internal/helpers"
 	"github.com/mesamhaider/edge-device-sample/internal/pkg/logging"
-	"github.com/mesamhaider/edge-device-sample/internal/services"
 )
 
 func NewCoreHandler(storage *data.InMemoryStorage, logger *zap.Logger) *CoreHandler {

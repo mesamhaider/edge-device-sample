@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mesamhaider/edge-device-sample/internal/services"
+	services "github.com/mesamhaider/edge-device-sample/internal/helpers"
 )
 
 func TestCalculateUptime(t *testing.T) {

@@ -17,7 +17,7 @@
 │   ├── handler/             # HTTP handlers
 │   ├── http/
 │   ├── pkg/
-│   ├── services/
+│   ├── helpers/            # Helper functions
 ├── Makefile                 # Makefile to 
 ├── results.txt              # Simulator outputs
 ├── sim/                     # Device simulator binary
@@ -38,7 +38,7 @@ All API handlers can be found under `internal/handler/core_handler.go`.
 
 ## Helpers
 
-All core helpers, for example calculating the averages can be found under `internal/services`.
+All core helpers, for example calculating the averages can be found under `internal/helpers`.
 
 ## Packages
 
