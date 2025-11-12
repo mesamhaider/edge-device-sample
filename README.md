@@ -143,3 +143,7 @@ To bring your services back down, run the following command:
 ```
 make stop-docker
 ```
+
+## Potential Future considerations
+- Add an actual database. 
+- Add more logic to the Github Actions workflow and ensure that tests are run before we builf the image.
