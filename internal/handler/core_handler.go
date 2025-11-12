@@ -82,7 +82,6 @@ func (h *CoreHandler) AddBeat(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// NewDeviceStats handles POST /devices/{device_id}/stats.
 func (h *CoreHandler) NewDeviceStats(w http.ResponseWriter, r *http.Request) {
 	device, err := h.getDeviceFromRequest(r)
 	if err != nil {
@@ -130,7 +129,6 @@ func (h *CoreHandler) NewDeviceStats(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetDeviceStats handles GET /devices/{device_id}/stats.
 func (h *CoreHandler) GetDeviceStats(w http.ResponseWriter, r *http.Request) {
 	device, err := h.getDeviceFromRequest(r)
 	if err != nil {
